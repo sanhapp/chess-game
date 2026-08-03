@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Chess Master - Cross-Platform</title>
+  
+  <!-- CSS Dependencies -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css">
+  
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    body {
+      background-color: #1a1a24;
+      color: #f0f0f5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 12px;
+      touch-action: manipulation;
+    }
+
+    .container {
+      background: #242433;
+      padding: 16px;
+      border-radius: 16px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+      max-width: 480px;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+
+    h1 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #ffffff;
+      text-align: center;
+    }
+
+    .controls {
+      display: flex;
+      gap: 8px;
+      width: 100%;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    select, button {
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid #3b3b52;
+      background: #2f2f42;
+      color: #ffffff;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      touch-action: manipulation;
+    }
+
+    select:hover, button:hover {
+      background: #3b3b52;
+      border-color: #525270;
+    }
+
+    button.primary {
+      background: #4f46e5;
+      border-color: #6366f1;
+    }
+
+    button.primary:hover {
+      background: #4338ca;
+    }
+
+    #board {
+      width: 100%;
+      max-width: 440px;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      touch-action: none; /* Prevents mobile scrolling while interacting with board */
+    }
+
+    .status-box {
+      width: 100%;
+      background: #1a1a24;
+      padding: 12px;
+      border-radius: 8px;
+      text-align: center;
+      font-weight: 600;
+      font-size: 0.95rem;
+      color: #a5b4fc;
+      border: 1px solid #3b3b52;
+    }
+
+    /* Move Highlight & Selection Styling */
+    .highlight-move {
+      box-shadow: inset 0 0 4px 4px rgba(34, 197, 94, 0.85);
+    }
+    
+    .highlight-selected {
+      background-color: rgba(234, 179, 8, 0.6) !important;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h1>Chess Master</h1>
+
+    <div class="controls">
+      <select id="modeSelect">
+        <option value="2player">2 Player (Pass & Play)</option>
+        <option value="easy">VS AI - Easy</option>
+        <option value="medium" selected>VS AI - Medium</option>
+        <option value="hard">VS AI - Hard</option>
+      </select>
+
+      <button id="undoBtn">Undo</button>
+      <button id="resetBtn" class="primary">New Game</button>
+    </div>
+
+    <div id="board"></div>
+
+    <div class="status-box" id="status">White's Turn</div>
+  </div>
+
+  <!-- JS Dependencies -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
+
+  <script>
+    let board = null;
+    const game = new Chess();
+    const $status = $('#status');
+    const $modeSelect = $('#modeSelect');
+    
+    let selectedSquare = null;
+
+    const pieceValues = {
+      p: 10, r: 50, n: 30, b: 30, q: 90, k: 900
+    };
+
+    function clearHighlights() {
+      $('#board .square-55d63').removeClass('highlight-move highlight-selected');
+    }
+
+    function showMoveGuide(square) {
+      clearHighlights();
+      
+      $('#board .square-' + square).addClass('highlight-selected');
+
+      const moves = game.moves({
+        square: square,
+        verbose: true
+      });
+
+      for (let i = 0; i < moves.length; i++) {
+        $('#board .square-' + moves[i].to).addClass('highlight-move');
+      }
+    }
+
+    // --- HYBRID CONTROLS: DRAG & DROP SUPPORT (DESKTOP) ---
+
+    function onDragStart(source, piece, position, orientation) {
+      if (game.game_over()) return false;
+
+      const mode = $modeSelect.val();
+      if (mode !== '2player' && game.turn() === 'b') return false;
+
+      if ((game.turn() === 'w' && piece.search(/^b/) !== -1) ||
+          (game.turn() === 'b' && piece.search(/^w/) !== -1)) {
+        return false;
+      }
+
+      selectedSquare = source;
+      showMoveGuide(source);
+    }
+
+    function onDrop(source, target) {
+      clearHighlights();
+      selectedSquare = null;
+
+      const move = game.move({
+        from: source,
+        to: target,
+        promotion: 'q'
+      });
+
+      if (move === null) return 'snapback';
+
+      updateStatus();
+
+      const mode = $modeSelect.val();
+      if (mode !== '2player' && !game.game_over() && game.turn() === 'b') {
+        window.setTimeout(makeAIMove, 250);
+      }
+    }
+
+    function onSnapEnd() {
+      board.position(game.fen());
+    }
+
+    // --- HYBRID CONTROLS: TAP / CLICK TO MOVE (MOBILE & DESKTOP) ---
+
+    function handleSquareClick(square) {
+      if (game.game_over()) return;
+
+      const mode = $modeSelect.val();
+      if (mode !== '2player' && game.turn() === 'b') return;
+
+      const piece = game.get(square);
+
+      // 1. Select initial piece
+      if (selectedSquare === null) {
+        if (piece && piece.color === game.turn()) {
+          selectedSquare = square;
+          showMoveGuide(square);
+        }
+        return;
+      }
+
+      // 2. Deselect if same square clicked
+      if (selectedSquare === square) {
+        selectedSquare = null;
+        clearHighlights();
+        return;
+      }
+
+      // 3. Switch selection to another piece of own color
+      if (piece && piece.color === game.turn()) {
+        selectedSquare = square;
+        showMoveGuide(square);
+        return;
+      }
+
+      // 4. Make move to target square
+      const move = game.move({
+        from: selectedSquare,
+        to: square,
+        promotion: 'q'
+      });
+
+      if (move !== null) {
+        selectedSquare = null;
+        clearHighlights();
+        board.position(game.fen());
+        updateStatus();
+
+        if (mode !== '2player' && !game.game_over() && game.turn() === 'b') {
+          window.setTimeout(makeAIMove, 250);
+        }
+      } else {
+        selectedSquare = null;
+        clearHighlights();
+      }
+    }
+
+    function setupSquareClickListeners() {
+      $('#board').on('click', '.square-55d63', function () {
+        const square = $(this).attr('data-square');
+        handleSquareClick(square);
+      });
+    }
+
+    // --- AI LOGIC ---
+
+    function makeAIMove() {
+      const mode = $modeSelect.val();
+      let move = null;
+
+      if (mode === 'easy') {
+        move = getRandomMove();
+      } else if (mode === 'medium') {
+        move = getBestMoveDepth(2);
+      } else if (mode === 'hard') {
+        move = getBestMoveDepth(3);
+      }
+
+      if (move) {
+        game.move(move);
+        board.position(game.fen());
+        updateStatus();
+      }
+    }
+
+    function getRandomMove() {
+      const legalMoves = game.moves();
+      if (legalMoves.length === 0) return null;
+      return legalMoves[Math.floor(Math.random() * legalMoves.length)];
+    }
+
+    function getBestMoveDepth(depth) {
+      const legalMoves = game.moves();
+      if (legalMoves.length === 0) return null;
+
+      let bestMove = null;
+      let bestValue = -Infinity;
+
+      for (let i = 0; i < legalMoves.length; i++) {
+        const move = legalMoves[i];
+        game.move(move);
+        const boardValue = minimax(depth - 1, -Infinity, Infinity, false);
+        game.undo();
+
+        if (boardValue > bestValue) {
+          bestValue = boardValue;
+          bestMove = move;
+        }
+      }
+      return bestMove;
+    }
+
+    function minimax(depth, alpha, beta, isMaximizing) {
+      if (depth === 0 || game.game_over()) {
+        return evaluateBoard();
+      }
+
+      const legalMoves = game.moves();
+
+      if (isMaximizing) {
+        let maxEval = -Infinity;
+        for (let i = 0; i < legalMoves.length; i++) {
+          game.move(legalMoves[i]);
+          const evaluation = minimax(depth - 1, alpha, beta, false);
+          game.undo();
+          maxEval = Math.max(maxEval, evaluation);
+          alpha = Math.max(alpha, evaluation);
+          if (beta <= alpha) break;
+        }
+        return maxEval;
+      } else {
+        let minEval = Infinity;
+        for (let i = 0; i < legalMoves.length; i++) {
+          game.move(legalMoves[i]);
+          const evaluation = minimax(depth - 1, alpha, beta, true);
+          game.undo();
+          minEval = Math.min(minEval, evaluation);
+          beta = Math.min(beta, evaluation);
+          if (beta <= alpha) break;
+        }
+        return minEval;
+      }
+    }
+
+    function evaluateBoard() {
+      let totalEvaluation = 0;
+      const boardState = game.board();
+
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          const piece = boardState[r][c];
+          if (piece) {
+            const val = pieceValues[piece.type];
+            totalEvaluation += (piece.color === 'b' ? val : -val);
+          }
+        }
+      }
+      return totalEvaluation;
+    }
+
+    // --- STATUS & CONTROLS ---
+
+    function updateStatus() {
+      let statusStr = '';
+      const moveColor = game.turn() === 'w' ? 'White' : 'Black';
+
+      if (game.in_checkmate()) {
+        statusStr = `Game Over: ${moveColor} is in checkmate!`;
+      } else if (game.in_draw()) {
+        statusStr = 'Game Over: Draw / Stalemate!';
+      } else {
+        statusStr = `${moveColor}'s Turn`;
+        if (game.in_check()) {
+          statusStr += ' (CHECK!)';
+        }
+      }
+
+      $status.text(statusStr);
+    }
+
+    $('#undoBtn').on('click', function () {
+      const mode = $modeSelect.val();
+      selectedSquare = null;
+      clearHighlights();
+
+      if (mode === '2player') {
+        game.undo();
+      } else {
+        game.undo();
+        game.undo();
+      }
+      
+      board.position(game.fen());
+      updateStatus();
+    });
+
+    $('#resetBtn').on('click', function () {
+      selectedSquare = null;
+      game.reset();
+      board.position('start');
+      clearHighlights();
+      updateStatus();
+    });
+
+    $modeSelect.on('change', function () {
+      selectedSquare = null;
+      game.reset();
+      board.position('start');
+      clearHighlights();
+      updateStatus();
+    });
+
+    // --- INITIALIZATION ---
+
+    const config = {
+      draggable: true,
+      position: 'start',
+      onDragStart: onDragStart,
+      onDrop: onDrop,
+      onSnapEnd: onSnapEnd,
+      pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
+    };
+
+    board = Chessboard('board', config);
+    setupSquareClickListeners();
+    $(window).resize(board.resize);
+    updateStatus();
+  </script>
+</body>
+</html>
