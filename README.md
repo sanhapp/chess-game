@@ -1,6 +1,6 @@
 # ♟️ Chess Master — Cross-Platform Web Chess
 
-A responsive, feature-rich HTML5 Chess game designed to run seamlessly across laptops, desktops, tablets, and mobile devices. Built using vanilla JavaScript, **Chess.js** for game logic, and **Chessboard.js** for interactive board rendering.
+A responsive, feature-rich HTML5 Chess game designed to run seamlessly across laptops, desktops, tablets, and mobile devices. Built using vanilla JavaScript, **Chess.js** for game logic, and **Chessboard.js** for interactive board rendering .
 
 ---
 
