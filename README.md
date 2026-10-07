@@ -26,6 +26,7 @@ A responsive, feature-rich HTML5 Chess game designed to run seamlessly across la
 - 🎨 **Modern Dark Theme UI:** Sleek UI optimized for small mobile displays as well as high-resolution monitors.
 
 ---
+## To Play Click the link: https://sanhapp.github.io/chess-game/ 
 
 ## 🚀 Quick Start
 
